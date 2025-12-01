@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Laudo de Solo (JS)</title>
+    <link rel="stylesheet" href="style.css"> 
+</head>
+<body>
+    <div class="container">
+        <h1>🌱 Relatório de Fertilidade do Solo</h1>
+
+        <div id="secaoFormulario">
+            <p class="description">Insira os resultados da sua análise de solo para gerar as recomendações automáticas.</p>
+            
+            <p id="erroMensagem" class="error"></p>
+
+            <form id="laudoForm">
+                <div class="input-grid">
+                    <div class="input-group"><label for="inputpH">pH</label><input type="number" step="0.1" id="inputpH" required></div>
+                    <div class="input-group"><label for="inputMO">Matéria Orgânica (%)</label><input type="number" step="0.1" id="inputMO" required></div>
+                    <div class="input-group"><label for="inputP">Fósforo (P em mg/dm³)</label><input type="number" step="0.1" id="inputP" required></div>
+                    <div class="input-group"><label for="inputK">Potássio (K em cmolc/dm³)</label><input type="number" step="0.1" id="inputK" required></div>
+                    <div class="input-group"><label for="inputCa">Cálcio (Ca em cmolc/dm³)</label><input type="number" step="0.1" id="inputCa" required></div>
+                    <div class="input-group"><label for="inputMg">Magnésio (Mg em cmolc/dm³)</label><input type="number" step="0.1" id="inputMg" required></div>
+                    <div class="input-group"><label for="inputV">Saturação por Bases (V%)</label><input type="number" step="0.1" id="inputV" required></div>
+                    <div class="input-group"><label for="inputAl">Alumínio (Al3+ em cmolc/dm³)</label><input type="number" step="0.1" id="inputAl" required></div>
+                </div>
+                
+                <button type="submit">Gerar Relatório</button>
+            </form>
+        </div>
+
+        <div id="secaoRelatorio" style="display: none;">
+            <h2>✅ Laudo de Fertilidade do Solo Concluído</h2>
+
+            <h3>Tabela de Resultados Detalhados</h3>
+            
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Parâmetro</th>
+                        <th>Resultado</th>
+                        <th>Referência Ideal</th>
+                        <th>Status e Recomendação</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaResultadosBody">
+                    </tbody>
+            </table>
+
+            <div id="resumoGeral"></div> 
+
+            <button id="downloadPdfButton" class="pdf-button">Baixar/Imprimir Laudo (PDF)</button>
+
+            <button id="backButton" class="back-button">← Novo Laudo</button>
+        </div>
+    </div>
+    
+    <script>
+        
+        // ==============================================================================
+        // 1. FUNÇÕES DE REFERÊNCIA
+        // ==============================================================================
+
+        const obterReferencia = (parametro) => {
+            const referencias = {
+                "pH": "5.5 a 6.5",
+                "Matéria Orgânica (MO)": "> 3.0 %",
+                "Fósforo (P)": "12 a 18 mg/dm³",
+                "Potássio (K)": "0.3 a 0.6 cmolc/dm³",
+                "Cálcio (Ca)": "3.0 a 6.0 cmolc/dm³",
+                "Magnésio (Mg)": "1.0 a 2.0 cmolc/dm³",
+                "Saturação por bases (V%)": "60 a 80 %",
+                "Alumínio (Al3+)": "< 0.3 cmolc/dm³" 
+            };
+            return referencias[parametro] || "Referência não definida";
+        };
+
+        // ==============================================================================
+        // 2. FUNÇÕES DE ANÁLISE DOS PARÂMETROS
+        // ==============================================================================
+
+        const analisarPh = (resultadoPh) => {
+            if (resultadoPh < 5.5) {
+                return "Baixo (Ácido). Recomendação: Necessário calagem para neutralizar a acidez.";
+            } else if (resultadoPh > 6.5) {
+                return "Alto. Recomendação: Pode causar indisponibilidade de micronutrientes.";
+            }
+            return "Ideal. Recomendação: Sem necessidade de correção de acidez.";
+        };
+
+        const analisarMo = (resultadoMo) => {
+            if (resultadoMo < 3.0) {
+                return "Abaixo do ideal. Recomendação: Adicionar matéria orgânica (esterco, composto, palhada) para melhorar a estrutura e retenção de água.";
+            }
+            return "Ideal. Recomendação: Sem necessidade de correção.";
+        };
+
+        const analisarP = (resultadoP) => {
+            if (resultadoP < 12) {
+                return "Abaixo do ideal. Recomendação: Realizar adubação fosfatada, pois o P é vital para o desenvolvimento radicular.";
+            } else if (resultadoP > 18) {
+                return "Acima do ideal. Recomendação: Reduzir ou suspender a adubação fosfatada.";
+            }
+            return "Ideal. Recomendação: Sem necessidade de correção.";
+        };
+
+        const analisarK = (resultadoK) => {
+            if (resultadoK < 0.3) {
+                return "Abaixo do ideal. Recomendação: Realizar adubação potássica (K é essencial para a qualidade do fruto e resistência à seca).";
+            } else if (resultadoK > 0.6) {
+                return "Acima do ideal. Recomendação: Suspender ou reduzir a adubação potássica.";
+            }
+            return "Ideal. Recomendação: Sem necessidade de correção.";
+        };
+
+        const analisarCa = (resultadoCa) => {
+            if (resultadoCa < 3.0) {
+                return "Abaixo do ideal. Recomendação: Aplicar calcário calcítico (rico em Ca) ou dolomítico se o Mg também estiver baixo.";
+            } else if (resultadoCa > 6.0) {
+                return "Acima do ideal. Nível alto, mas aceitável. Monitorar o equilíbrio Ca:Mg:K.";
+            }
+            return "Ideal. Recomendação: Sem necessidade de correção.";
+        };
+
+        const analisarMg = (resultadoMg) => {
+            if (resultadoMg < 1.0) {
+                return "Abaixo do ideal. Recomendação: Aplicar calcário dolomítico (rico em Mg) para corrigir a deficiência.";
+            } else if (resultadoMg > 2.0) {
+                return "Acima do ideal. Recomendação: Nível alto. Aplicar calcário calcítico (puro Ca) para evitar excesso de Mg e manter o equilíbrio.";
+            }
+            return "Ideal. Recomendação: Sem necessidade de correção.";
+        };
+
+        const analisarSaturacaoBases = (resultadoV) => {
+            if (resultadoV < 60) {
+                return "Baixa. Recomendação: Crucial para a produtividade. Aumentar a V% com calagem é essencial.";
+            } else if (resultadoV > 80) {
+                return "Muito Alta. Recomendação: Monitorar.";
+            }
+            return "Ideal. Recomendação: Boa condição para a maioria das culturas.";
+        };
+
+        const analisarAluminio = (resultadoAl) => {
+            if (resultadoAl >= 0.3) {
+                return "Alto (Tóxico). Recomendação: A calagem é fundamental para a precipitação do Alumínio."; 
+            }
+            return "Baixo. Recomendação: Nível seguro para as plantas.";
+        };
+
+
+        // ==============================================================================
+        // 3. FUNÇÃO PRINCIPAL E LÓGICA DE WEB
+        // ==============================================================================
+
+        const gerarRelatorioWeb = (event) => {
+            event.preventDefault(); 
+            
+            const parametros = [
+                { nome: 'pH', id: 'inputpH', analise: analisarPh, unidade: '' },
+                { nome: 'Matéria Orgânica (MO)', id: 'inputMO', analise: analisarMo, unidade: '%' },
+                { nome: 'Fósforo (P)', id: 'inputP', analise: analisarP, unidade: 'mg/dm³' },
+                { nome: 'Potássio (K)', id: 'inputK', analise: analisarK, unidade: 'cmolc/dm³' },
+                { nome: 'Cálcio (Ca)', id: 'inputCa', analise: analisarCa, unidade: 'cmolc/dm³' },
+                { nome: 'Magnésio (Mg)', id: 'inputMg', analise: analisarMg, unidade: 'cmolc/dm³' },
+                { nome: 'Saturação por bases (V%)', id: 'inputV', analise: analisarSaturacaoBases, unidade: '%' },
+                { nome: 'Alumínio (Al3+)', id: 'inputAl', analise: analisarAluminio, unidade: 'cmolc/dm³' }
+            ];
+
+            let resultadosHtml = "";
+            const analisesResultados = {}; 
+
+            try {
+                parametros.forEach(p => {
+                    const inputElement = document.getElementById(p.id);
+                    if (!inputElement || inputElement.value === "") {
+                        throw new Error("Por favor, preencha todos os campos.");
+                    }
+                    const resultado = parseFloat(inputElement.value);
+                    
+                    if (isNaN(resultado)) {
+                        throw new Error("Por favor, insira apenas números válidos.");
+                    }
+
+                    const analiseTexto = p.analise(resultado);
+                    analisesResultados[p.nome] = analiseTexto;
+
+                    const referencia = obterReferencia(p.nome);
+                    resultadosHtml += `
+                        <tr>
+                            <td>${p.nome}</td>
+                            <td>${resultado} ${p.unidade}</td>
+                            <td>${referencia}</td>
+                            <td class="status">${analiseTexto}</td>
+                        </tr>
+                    `;
+                });
+                
+                document.getElementById('tabelaResultadosBody').innerHTML = resultadosHtml;
+
+                const resumoGeral = gerarResumoGeral(analisesResultados);
+                document.getElementById('resumoGeral').innerHTML = resumoGeral;
+                
+                document.getElementById('secaoRelatorio').style.display = 'block';
+                document.getElementById('secaoFormulario').style.display = 'none';
+                document.getElementById('erroMensagem').textContent = '';
+
+            } catch (error) {
+                document.getElementById('erroMensagem').textContent = `Erro: ${error.message}`;
+                document.getElementById('secaoRelatorio').style.display = 'none';
+                document.getElementById('secaoFormulario').style.display = 'block';
+            }
+        };
+
+
+        cconst gerarResumoGeral = (analisesResultados) => {
+    // Usa os textos de análise armazenados
+    const analisePh = analisesResultados['pH'];
+    const analiseV = analisesResultados['Saturação por bases (V%)'];
+    const analiseAl = analisesResultados['Alumínio (Al3+)'];
+    const analiseP = analisesResultados['Fósforo (P)'];
+    const analiseK = analisesResultados['Potássio (K)'];
+    const analiseCa = analisesResultados['Cálcio (Ca)'];
+    const analiseMg = analisesResultados['Magnésio (Mg)'];
+
+    // Define as condições de correção
+    const isCalagemPorPh = analisePh.includes("Necessário calagem");
+    const isCalagemPorV = analiseV.includes("Crucial");
+    const isCalagemPorAl = analiseAl.includes("Tóxico");
+
+    const requerCalagem = isCalagemPorPh || isCalagemPorV || isCalagemPorAl;
+
+    let resumoHtml = `<div class="resumo-box">
+        <h3 class="resumo-title">RESUMO E RECOMENDAÇÃO DE MANEJO GERAL</h3>`;
+    
+    if (requerCalagem) {
+        
+        // --- NOVIDADE: MONTAGEM DO MOTIVO DA CALAGEM COM PRECISÃO ---
+        let motivos = [];
+        if (isCalagemPorPh) motivos.push("Acidez Severa ($\text{pH}$ baixo)");
+        if (isCalagemPorAl) motivos.push("Alumínio Tóxico ($\text{Al}^{3+}$)");
+        if (isCalagemPorV) motivos.push("Baixa Saturação por Bases ($\text{V\%}$) para o nível de produtividade desejado");
+        
+        const motivoCalagem = motivos.join(', e '); // Conecta os motivos (ex: "Acidez Severa, e Baixa Saturação...")
+
+        resumoHtml += `
+            <p>🚨 <strong>Prioridade Máxima: CORREÇÃO DO SOLO (CALAGEM)</strong>.</p>
+            <p>Seu solo requer intervenção devido a ${motivoCalagem}.</p>
+            <p>A calagem é o primeiro passo para o sucesso da lavoura, visando aumentar o fornecimento de $\text{Ca}$ e $\text{Mg}$ e elevar a $\text{V\%}$.</p>
+            <p><strong>Tipo de Calcário Sugerido:</strong></p>
+        `;
+        
+        if (deficienciaMg) {
+             resumoHtml += `<p class="item-destaque">  -> <strong>Calcário Dolomítico:</strong> Necessário corrigir a $\text{V\%}$ e a deficiência de Magnésio (Mg=0.9 cmolc/dm³ está abaixo do ideal 1.0)[cite: 358, 361].</p>`;
+        } else if (deficienciaCa) {
+             resumoHtml += `<p class="item-destaque">  -> <strong>Calcário Calcítico:</strong> Priorizar Cálcio para corrigir a $\text{V\%}$, pois o Magnésio está adequado[cite: 372, 375].</p>`;
+        } else {
+             resumoHtml += `<p class="item-destaque">  -> <strong>Calcário a Definir:</strong> (Consultar análise de Mg/Ca) ou usar Dolomítico para garantir o Mg.</p>`;
+        }
+        
+        if (deficienciaP || deficienciaK) {
+            resumoHtml += `<p><strong>Próximo Passo:</strong> Após o período de reação do calcário, será necessária a **Adubação de Correção** para repor os nutrientes $\text{P}$ e/ou $\text{K}$ deficientes.</p>`;
+        }
+
+    } else {
+        // Se a acidez está controlada
+        // A saturação por bases (V%) deve estar adequada para cair neste bloco
+        if (analiseV.includes("Ideal")) {
+            resumoHtml += `<p>✅ <strong>Status de Acidez:</strong> Seu solo está bem equilibrado ($\text{pH}$, $\text{V\%}$ e $\text{Al}^{3+}$ adequados).</p>`;
+        } else {
+            // Este caso só deve ocorrer se V% > 80, que é Muito Alta
+            resumoHtml += `<p>✅ <strong>Status de Acidez:</strong> $\text{pH}$ e $\text{Al}^{3+}$ adequados. Monitorar $\text{V\%}$ (${analiseV.split('.')[0]}).</p>`;
+        }
+        
+        const deficienciaCa = analiseCa.includes("Abaixo do ideal");
+        const deficienciaMg = analiseMg.includes("Abaixo do ideal");
+        const deficienciaP = analiseP.includes("Abaixo do ideal");
+        const deficienciaK = analiseK.includes("Abaixo do ideal");
+        
+                if (deficienciaP || deficienciaK || deficienciaCa || deficienciaMg) {
+                    resumoHtml += `<p>⚠️ <strong>Foco na Adubação de Correção:</strong> Há deficiências de nutrientes específicos.</p>`;
+                    
+                    resumoHtml += `<p><strong>Recomendações Específicas:</strong></p><ul>`;
+                    if (deficienciaCa) resumoHtml += `<li>Aplicar <strong>Cálcio (Ca)</strong>, provavelmente via gesso agrícola (se o pH já estiver corrigido).</li>`;
+                    if (deficienciaMg) resumoHtml += `<li>Aplicar <strong>Magnésio (Mg)</strong> (ex: sulfato de Mg).</li>`;
+                    if (deficienciaP) resumoHtml += `<li>Realizar <strong>Adubação Fosfatada</strong> (P).</li>`;
+                    if (deficienciaK) resumoHtml += `<li>Realizar <strong>Adubação Potássica</strong> (K).</li>`;
+                    resumoHtml += `</ul>`;
+
+                    // Reiteração sobre P e MO (se estiverem acima/abaixo)
+                    if (analiseP.includes("Acima do ideal")) {
+                        resumoHtml += `<p>Nota: O Fósforo ($\text{P}$) está acima do ideal. Reduza a adubação fosfatada.</p>`;
+                    }
+                    if (analisesResultados['Matéria Orgânica (MO)'].includes("Abaixo do ideal")) {
+                        resumoHtml += `<p>Nota: A Matéria Orgânica ($\text{MO}$) está abaixo do ideal. Mantenha ou intensifique a adição de composto/palhada[cite: 30].</p>`;
+                    }
+                
+                } else {
+                    resumoHtml += `<p>🎉 <strong>Parabéns!</strong> Seu solo está com excelente fertilidade. Continue com o manejo adequado e a <strong>Adubação de Manutenção</strong> para a cultura que será implantada.</p>`;
+                }
+            }
+            
+            resumoHtml += "</div>";
+            return resumoHtml;
+        };
+
+
+        // ==============================================================================
+        // 4. INICIALIZAÇÃO: Associa a função ao clique do botão
+        // ==============================================================================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('laudoForm');
+            if (form) {
+                form.addEventListener('submit', gerarRelatorioWeb);
+            }
+            
+            const backButton = document.getElementById('backButton');
+            if (backButton) {
+                backButton.addEventListener('click', () => {
+                    document.getElementById('secaoRelatorio').style.display = 'none';
+                    document.getElementById('secaoFormulario').style.display = 'block';
+                    document.getElementById('laudoForm').reset();
+                    document.getElementById('erroMensagem').textContent = '';
+                });
+            }
+            // Configura o botão de Download/Imprimir PDF
+            const downloadPdfButton = document.getElementById('downloadPdfButton');
+            if (downloadPdfButton) {
+                downloadPdfButton.addEventListener('click', () => {
+                    // Este comando nativo abre a janela de impressão do navegador
+                    window.print(); 
+                    // O usuário pode então escolher "Salvar como PDF"
+                });
+            }
+        });
+    </script>
+</body>
+</html>
